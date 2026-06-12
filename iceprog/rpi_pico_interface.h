@@ -8,6 +8,6 @@
 
 extern const interface_t rpi_pico_interface;
 
-void rpi_pico_interface_init();
+void rpi_pico_interface_init(bool slow_speed);
 
 #endif

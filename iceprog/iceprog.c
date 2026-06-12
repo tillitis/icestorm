@@ -847,7 +847,7 @@ int main(int argc, char **argv)
 //	ftdi_interface_init(ifnum, devstr, slow_clock);
 //	interface = &ftdi_interface;
 
-	rpi_pico_interface_init();
+	rpi_pico_interface_init(slow_clock);
 	interface = &rpi_pico_interface;
 
 	fprintf(stderr, "cdone: %s\n", interface->get_cdone() ? "high" : "low");

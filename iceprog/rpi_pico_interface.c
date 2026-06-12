@@ -1,4 +1,5 @@
 #include "rpi_pico_interface.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -201,6 +202,8 @@ static void bitbang_spi_no_cs(
 #define PIN_MISO 11
 #define PIN_CRESET 14
 #define PIN_CDONE 15
+#define SPI_SPEED_MHZ 15
+#define SPI_SLOW_SPEED_MHZ 5
 
 // ********* iceprog API ****************
 
@@ -329,7 +332,7 @@ bool check_firmware_version() {
     return true;
 }
 
-void rpi_pico_interface_init() {
+void rpi_pico_interface_init(bool slow_speed) {
     if (libusb_init(&ctx) != 0) {
         printf("failure!\n");
 
@@ -373,7 +376,13 @@ void rpi_pico_interface_init() {
 
     pin_write(PIN_POWER, true);
 
-    set_spi_pins(PIN_SCK, PIN_SS, PIN_MOSI, PIN_MISO, 15);
+    uint8_t speed_mhz = SPI_SPEED_MHZ;
+    if (slow_speed) {
+        speed_mhz = SPI_SLOW_SPEED_MHZ;
+    printf("Slow speed selected\n");
+    }
+
+    set_spi_pins(PIN_SCK, PIN_SS, PIN_MOSI, PIN_MISO, speed_mhz);
 }
 
 // ********* API ****************
