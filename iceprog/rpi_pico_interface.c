@@ -232,7 +232,7 @@ static void error(int status) {
 
 static void set_cs_creset(int cs_b, int creset_b) {
     pinmask_write(
-        (1<<PIN_SS) | (1<PIN_CRESET),
+        (1<<PIN_SS) | (1<<PIN_CRESET),
         ((cs_b>0?1:0)<<PIN_SS) | ((creset_b>0?1:0)<<PIN_CRESET)
     );
 }
