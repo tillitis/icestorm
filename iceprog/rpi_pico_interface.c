@@ -1,5 +1,7 @@
 #include "rpi_pico_interface.h"
+#include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +12,8 @@
 #define PRODUCT_ID 0x8886
 
 //static hid_device * handle;
+
+static bool use_bulk_transfer = false;
 
 libusb_context *ctx=NULL;
 struct libusb_device_handle *devhaccess;
@@ -45,6 +49,36 @@ void usb_exit ( int sig )
 
 }
 
+
+int usb_write_bulk(uint8_t request, uint8_t *data, int length)
+{
+    struct timeval start_time;
+    time_event_start(&start_time);
+
+    uint8_t _data[length+1];
+    _data[0] = request;
+    memcpy(_data+1, data, length);
+
+    int transferred = 0;
+
+    int ret = libusb_bulk_transfer(
+        devhaccess,
+        0x01,              // EP OUT
+        _data,
+        length+1,
+        &transferred,
+        1000
+    );
+
+    write_calls++;
+    write_time += time_event_finish(&start_time);
+
+    if (ret == 0 && transferred != length+1)
+        return -1;
+
+    return ret;
+}
+
 int usb_write(uint8_t request, uint8_t* data, int length) {
     struct timeval start_time;
     time_event_start(&start_time);
@@ -60,6 +94,33 @@ int usb_write(uint8_t request, uint8_t* data, int length) {
 
     write_calls++;
     write_time += time_event_finish(&start_time);
+    return ret;
+}
+
+int usb_read_bulk(uint8_t request, uint8_t *data, int length)
+{
+    struct timeval start_time;
+    time_event_start(&start_time);
+
+    (void)request; // Kept to keep the prototype same as for control transfers
+
+    int transferred = 0;
+
+    int ret = libusb_bulk_transfer(
+        devhaccess,
+        0x81,              // EP IN
+        data,
+        length,
+        &transferred,
+        1000
+    );
+
+    read_calls++;
+    read_time += time_event_finish(&start_time);
+
+    if (ret == 0 && transferred != length)
+        return -1;
+
     return ret;
 }
 
@@ -124,7 +185,11 @@ static void pinmask_write(uint32_t mask, uint32_t val) {
     buf[6] = (val >> 8) & 0xff;
     buf[7] = (val >> 0) & 0xff;
 
-    usb_write(COMMAND_PIN_VALUES, buf, sizeof(buf));
+    if (use_bulk_transfer) {
+        usb_write_bulk(COMMAND_PIN_VALUES, buf, sizeof(buf));
+    } else {
+        usb_write(COMMAND_PIN_VALUES, buf, sizeof(buf));
+    }
 }
 
 static void pin_write(uint8_t pin, bool value) {
@@ -172,26 +237,41 @@ static void bitbang_spi_no_cs(
     uint8_t* buf_out,
     uint8_t* buf_in) {
 
-    if(byte_count > MAX_BYTES_PER_TRANSFER) {
+    if (byte_count > MAX_BYTES_PER_TRANSFER) {
         printf("bit count too high\n");
         exit(1);
     }
 
-    uint8_t buf[4+MAX_BYTES_PER_TRANSFER];
+    uint8_t buf[6+MAX_BYTES_PER_TRANSFER];
     memset(buf, 0xFF, sizeof(buf));
 
-    buf[0] = 0; // Do not toggle CS
-    buf[1] = (byte_count >> 24) & 0xff;
-    buf[2] = (byte_count >> 16) & 0xff;
-    buf[3] = (byte_count >> 8) & 0xff;
-    buf[4] = (byte_count >> 0) & 0xff;
+    if (use_bulk_transfer) {
+        buf[0] = (buf_in != NULL) ? 1 : 0; // Indicate if expect a response
+        buf[1] = 0; // Do not toggle CS
+        buf[2] = (byte_count >> 24) & 0xff;
+        buf[3] = (byte_count >> 16) & 0xff;
+        buf[4] = (byte_count >> 8) & 0xff;
+        buf[5] = (byte_count >> 0) & 0xff;
 
-    memcpy(&buf[5], buf_out, byte_count);
+        memcpy(&buf[6], buf_out, byte_count);
+        usb_write_bulk(COMMAND_SPI_XFER, buf, byte_count+6);
+    } else {
+        buf[0] = 0; // Do not toggle CS
+        buf[1] = (byte_count >> 24) & 0xff;
+        buf[2] = (byte_count >> 16) & 0xff;
+        buf[3] = (byte_count >> 8) & 0xff;
+        buf[4] = (byte_count >> 0) & 0xff;
 
-    usb_write(COMMAND_SPI_XFER, buf, byte_count+5);
+        memcpy(&buf[5], buf_out, byte_count);
+        usb_write(COMMAND_SPI_XFER, buf, byte_count+5);
+    }
 
-    if(buf_in != NULL) {
-        usb_read(COMMAND_SPI_XFER, buf_in, byte_count);
+    if (buf_in != NULL) {
+        if (use_bulk_transfer) {
+            usb_read_bulk(COMMAND_SPI_XFER, buf_in, byte_count);
+        } else {
+            usb_read(COMMAND_SPI_XFER, buf_in, byte_count);
+        }
     }
 }
 
@@ -318,15 +398,21 @@ bool check_for_old_firmware() {
 
 bool check_firmware_version() {
     const uint16_t bcd_device = 0x0200;
+    const uint16_t bcd_bulk_device = 0x0201;
 
     struct libusb_device_descriptor device_descriptor;
 
-    if(libusb_get_device_descriptor(libusb_get_device(devhaccess), &device_descriptor) != 0) {
+    if (libusb_get_device_descriptor(libusb_get_device(devhaccess), &device_descriptor) != 0) {
         return false;
     }
 
-    if(device_descriptor.bcdDevice != bcd_device) {
+    if (device_descriptor.bcdDevice < bcd_device) {
         return false;
+    }
+
+    if (device_descriptor.bcdDevice >= bcd_bulk_device) {
+        printf("Using bulk transfer!\n");
+        use_bulk_transfer = true;
     }
 
     return true;
