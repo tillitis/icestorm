@@ -794,7 +794,7 @@ int main(int argc, char **argv)
 		   named pipe, or contrarily, the standard input may be an
 		   ordinary file. */
 
-		if (!prog_sram && !check_mode) {
+		if (!prog_sram) {
 			if (fseek(f, 0L, SEEK_END) != -1) {
 				file_size = ftell(f);
 				if (file_size == -1) {
