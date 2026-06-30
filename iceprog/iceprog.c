@@ -1038,7 +1038,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, "addr 0x%06X %3ld%%\r", rw_offset + addr, 100 * addr / file_size);
 				flash_read(rw_offset + addr, buffer_flash, rc);
 				if (memcmp(buffer_file, buffer_flash, rc)) {
-					fprintf(stderr, "Found difference between flash and file!\n");
+					fprintf(stderr, "Found difference between flash and file! (0x%02x)\n", rw_offset + addr);
 					interface->error(3);
 				}
 			}
