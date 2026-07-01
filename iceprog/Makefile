@@ -27,7 +27,7 @@ ifeq ($(OS),macos)
 $(PROGRAM_PREFIX)iceprog$(EXE): iceprog.o rpi_pico_interface.o
 	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $^ $(LDLIBS)
 else
-$(PROGRAM_PREFIX)iceprog$(EXE): iceprog.o mpsse.o ftdi_interface.o rpi_pico_interface.o
+$(PROGRAM_PREFIX)iceprog$(EXE): iceprog.o rpi_pico_interface.o
 	$(CC) -o $@ $(LDFLAGS) $^ $(LDLIBS)
 endif
 
