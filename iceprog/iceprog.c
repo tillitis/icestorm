@@ -847,6 +847,14 @@ int main(int argc, char **argv)
 //	ftdi_interface_init(ifnum, devstr, slow_clock);
 //	interface = &ftdi_interface;
 
+	/* SIGTERM (what a supervising process sends on timeout) takes the same
+	 * graceful path as Ctrl-C, ending in interface->close(), which returns
+	 * the programmer's pins to inputs. Without it the process dies with
+	 * SPI and CRESET still driven into the target. Registered before the
+	 * interface init, which is where the pins become outputs. */
+	signal(SIGINT, sigint);
+	signal(SIGTERM, sigint);
+
 	rpi_pico_interface_init(slow_clock);
 	interface = &rpi_pico_interface;
 
@@ -854,8 +862,6 @@ int main(int argc, char **argv)
 
 	flash_release_reset();
 	usleep(100000);
-
-	signal(SIGINT, sigint);
 
 	if (test_mode)
 	{
